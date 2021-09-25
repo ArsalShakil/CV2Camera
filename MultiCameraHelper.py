@@ -128,7 +128,7 @@ class CameraHelper(object):
 
 if __name__ == '__main__':
     cam1 = CameraHelper("http://213.193.89.202/mjpg/video.mjpg", height=600, width=800)
-    cam2 = CameraHelper("rtsp://192.168.100.22:8080/h264_pcm.sdp", height=600, width=800)
+    cam2 = CameraHelper("http://2.42.203.84/mjpg/video.mjpg", height=600, width=800)
 
     # FOR TESTING
     show_cams([cam1, cam2])
