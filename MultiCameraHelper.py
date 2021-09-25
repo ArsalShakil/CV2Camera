@@ -8,7 +8,7 @@ def show_cams(cams):
     print ("Press 'q' to exit.")
     while True:
         for i, cam in enumerate(cams):
-            frame = cam.get_frame()
+            frame = cam.get_processed_frame()
             if frame is not None:
                 cv2.imshow("Cam "+str(i), frame)
 
@@ -20,10 +20,17 @@ def show_cams(cams):
             break
 
 def process_camera_frames(cam):
-    frame = cam.get_frame()
-    if frame is not None:
-        ## Implement Flow Here
-        pass
+    '''
+    Write ML Rule(s) logic in this function. It's being called at line 109 in this file. It'll be automatically called by each camera separately.
+    '''
+    while not cam.stop_thread:
+        frame = cam.get_frame()
+        if frame is not None:
+            ## Implement Flow Here, e.g: add bounding boxes, etc. on frame
+            #####...
+            cv2.rectangle(frame,(100,100),(200,200),(0,0,0),5)
+            #####...
+            cam.deque_processed.append(frame)
 
 class CameraHelper(object):
     def __init__(self, src_path, resize=True, height=None, width=None, retry_wait_minutes=1, deque_fps_seconds=10):
@@ -38,6 +45,7 @@ class CameraHelper(object):
         self.stream = None
         self.deque_fps_seconds = deque_fps_seconds
         self.deque = None
+        self.deque_processed = None
         self.stop_thread = False
 
         self.get_frame_thread = Thread(target=self.queue_frames, args=())
@@ -67,11 +75,12 @@ class CameraHelper(object):
                     if self.stream.isOpened():
                         self.ret, self.frame = self.stream.read()
                         if not self.ret or self.frame is None:
-                            print ("Connection Error Type 1! Retrying in {} second(s). ({})".format(int(self.retry_wait_minutes * 60), "Connection opened but unable to fetch frame!"))
+                            print ("Connection Error Type 1 on {}! Retrying in {} second(s). ({})".format(self.src_path, int(self.retry_wait_minutes * 60), "Connection opened but unable to fetch frame!"))
                             time.sleep(int(self.retry_wait_minutes * 60))
                             continue
                         self.fps = self.stream.get(cv2.CAP_PROP_FPS)
                         self.deque = deque(maxlen=int(self.deque_fps_seconds*self.fps))
+                        self.deque_processed = deque(maxlen=int(self.deque_fps_seconds*self.fps))
                         self.connected = True
                     else:
                         self.connected = False
@@ -80,7 +89,7 @@ class CameraHelper(object):
                     self.connected = False
                 finally:
                     if not self.connected:
-                        print ("Connection Error Type 2! Retrying in {} second(s). ({})".format(int(self.retry_wait_minutes * 60), error))
+                        print ("Connection Error Type 2 on {}! Retrying in {} second(s). ({})".format(self.src_path, int(self.retry_wait_minutes * 60), error))
                         time.sleep(int(self.retry_wait_minutes * 60))
                     else:
                         if self.width is None and self.height is None:
@@ -96,7 +105,11 @@ class CameraHelper(object):
     def queue_frames(self):
         time.sleep(5)
         self.connect()
-        process_camera_frames(self)
+
+        self.process_frames_thread = Thread(target=process_camera_frames, args=(self,))
+        self.process_frames_thread.daemon = True
+        self.process_frames_thread.start()
+
         while not self.stop_thread:
             try:
                 if self.stream:
@@ -125,10 +138,17 @@ class CameraHelper(object):
             return frame
         else:
             return None
+    
+    def get_processed_frame(self):
+        if self.deque_processed:
+            frame = self.deque_processed.pop()
+            return frame
+        else:
+            return None
 
 if __name__ == '__main__':
     cam1 = CameraHelper("http://213.193.89.202/mjpg/video.mjpg", height=600, width=800)
-    cam2 = CameraHelper("http://2.42.203.84/mjpg/video.mjpg", height=600, width=800)
+    cam2 = CameraHelper("http://2.42.203.84/mjpg/video.mjpg", height=450, width=800)
 
     # FOR TESTING
     show_cams([cam1, cam2])
